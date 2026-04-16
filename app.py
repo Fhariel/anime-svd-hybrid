@@ -17,8 +17,7 @@ st.write("Hybrid: SVD + Genre + Popularity")
 # =========================
 @st.cache_data
 def load_data():
-    df = pd.read_csv("anime_reference.csv")
-    return df
+    return pd.read_csv("anime_reference.csv")
 
 @st.cache_resource
 def load_model():
@@ -97,7 +96,7 @@ def rekomendasi(judul, top_n=10):
     skor_final[idx] = -1
     top_idx = skor_final.argsort()[::-1][:top_n]
 
-    return anime_df.iloc[top_idx]
+    return anime_df.iloc[top_idx].reset_index(drop=True)
 
 # =========================
 # UI INPUT
@@ -114,30 +113,31 @@ if st.button("Cari Rekomendasi"):
     else:
         st.subheader("Rekomendasi:")
 
-        for i, (_, row) in enumerate(hasil.iterrows(), start=1):
+        # 🔥 LOOP HARUS DI SINI SEMUA
+        for i, row in hasil.iterrows():
             title = row["title"]
             genre = row["genre"]
             score = row.get("score", "N/A")
 
-    # URL Google Search
-    search_url = f"https://www.google.com/search?q={title.replace(' ', '+')}"
+            search_url = f"https://www.google.com/search?q={title.replace(' ', '+')}"
 
-    st.markdown(f"""
-    <div style="margin-bottom: 20px;">
-        <h4>{i}. {title}</h4>
-        <p><b>Genre:</b> {genre}</p>
-        <p><b>Score MAL:</b> {score}</p>
-        <a href="{search_url}" target="_blank">
-            <button style="
-                padding: 6px 12px;
-                border-radius: 6px;
-                border: none;
-                background-color: #4CAF50;
-                color: white;
-                cursor: pointer;">
-                Search on Google
-            </button>
-        </a>
-    </div>
-    """, unsafe_allow_html=True)
-    st.markdown("---")
+            st.markdown(f"""
+            <div style="margin-bottom: 20px;">
+                <h4>{i+1}. {title}</h4>
+                <p><b>Genre:</b> {genre}</p>
+                <p><b>Score MAL:</b> {score}</p>
+                <a href="{search_url}" target="_blank">
+                    <button style="
+                        padding: 6px 12px;
+                        border-radius: 6px;
+                        border: none;
+                        background-color: #4CAF50;
+                        color: white;
+                        cursor: pointer;">
+                        Search on Google
+                    </button>
+                </a>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.markdown("---")
