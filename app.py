@@ -115,10 +115,9 @@ if st.button("Cari Rekomendasi"):
         st.subheader("Rekomendasi:")
 
         for i, (_, row) in enumerate(hasil.iterrows(), start=1):
-
-    title = row["title"]
-    genre = row["genre"]
-    score = row.get("score", "N/A")
+            title = row["title"]
+            genre = row["genre"]
+            score = row.get("score", "N/A")
 
     # URL Google Search
     search_url = f"https://www.google.com/search?q={title.replace(' ', '+')}"
