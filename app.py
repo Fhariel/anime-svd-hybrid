@@ -9,7 +9,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 # =========================
 st.set_page_config(page_title="Anime Recommender", layout="centered")
 
-st.title("🎌 Anime Recommendation System")
+st.title("Anime Recommendation System")
 st.write("Hybrid: SVD + Genre + Popularity")
 
 # =========================
@@ -112,8 +112,34 @@ if st.button("Cari Rekomendasi"):
     if hasil is None:
         st.error("Anime tidak ditemukan")
     else:
-        st.subheader("🔥 Rekomendasi:")
+        st.subheader("Rekomendasi:")
 
-        for _, row in hasil.iterrows():
-            st.write(f"**{row['title']}**")
-            st.caption(row["genre"])
+        for i, (_, row) in enumerate(hasil.iterrows(), start=1):
+
+    title = row["title"]
+    genre = row["genre"]
+    score = row.get("score", "N/A")
+
+    # URL Google Search
+    search_url = f"https://www.google.com/search?q={title.replace(' ', '+')}"
+
+    st.markdown(f"""
+    <div style="margin-bottom: 20px;">
+        <h4>{i}. {title}</h4>
+        <p><b>Genre:</b> {genre}</p>
+        <p><b>Score MAL:</b> {score}</p>
+        <a href="{search_url}" target="_blank">
+            <button style="
+                padding: 6px 12px;
+                border-radius: 6px;
+                border: none;
+                background-color: #4CAF50;
+                color: white;
+                cursor: pointer;">
+                Search on Google
+            </button>
+        </a>
+    </div>
+    """, unsafe_allow_html=True)
+
+        st.markdown("---")
