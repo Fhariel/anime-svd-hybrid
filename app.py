@@ -140,5 +140,4 @@ if st.button("Cari Rekomendasi"):
         </a>
     </div>
     """, unsafe_allow_html=True)
-
-        st.markdown("---")
+    st.markdown("---")
