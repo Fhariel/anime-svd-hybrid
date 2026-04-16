@@ -117,7 +117,6 @@ if st.button("Cari Rekomendasi"):
         for i, row in hasil.iterrows():
             title = row["title"]
             genre = row["genre"]
-            score = row.get("score", "N/A")
 
             search_url = f"https://www.google.com/search?q={title.replace(' ', '+')}"
 
@@ -125,7 +124,6 @@ if st.button("Cari Rekomendasi"):
             <div style="margin-bottom: 20px;">
                 <h4>{i+1}. {title}</h4>
                 <p><b>Genre:</b> {genre}</p>
-                <p><b>Score MAL:</b> {score}</p>
                 <a href="{search_url}" target="_blank">
                     <button style="
                         padding: 6px 12px;
