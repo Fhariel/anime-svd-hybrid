@@ -4,7 +4,7 @@ import numpy as np
 import joblib
 from sklearn.metrics.pairwise import cosine_similarity
 
-# =========================
+# =========================h
 # CONFIG
 # =========================
 st.set_page_config(page_title="Anime Recommender", layout="centered")
