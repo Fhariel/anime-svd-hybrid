@@ -13,25 +13,33 @@ st.set_page_config(page_title="Anime Recommender", layout="wide")
 @st.cache_resource
 def init_connection():
     try:
-        # Mengambil rahasia dari Streamlit Secrets
         return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
     except Exception as e:
         return None
 
 supabase = init_connection()
 
-# Inisialisasi status user di memori browser
 if 'user' not in st.session_state:
     st.session_state.user = None
 if 'page' not in st.session_state:
     st.session_state.page = "Home"
 
 # =========================
-# DATA & RECOM LOGIC
+# LOAD DATA & PREPROCESS
 # =========================
 @st.cache_data
 def load_data():
-    return pd.read_csv("anime_reference.csv")
+    df = pd.read_csv("anime_reference.csv")
+    
+    # Mengembalikan logika PREPROCESS dari kodemu yang asli agar terhindar dari KeyError
+    df["genre"] = df.get("genre", pd.Series(dtype=str)).fillna("")
+    df["score"] = pd.to_numeric(df.get("score", 0), errors="coerce").fillna(0)
+    df["members"] = pd.to_numeric(df.get("members", 0), errors="coerce").fillna(0)
+    
+    # Hitung popularity sejak awal
+    df["popularity"] = (df["score"] * 0.7) + (np.log1p(df["members"]) * 0.3)
+    
+    return df
 
 @st.cache_resource
 def load_model():
@@ -39,6 +47,9 @@ def load_model():
     tfidf = joblib.load("tfidf_matrix.pkl")
     return svd, tfidf
 
+# =========================
+# RECOM LOGIC
+# =========================
 def get_recommendations(judul, anime_df, svd_model, tfidf_matrix, top_n=10):
     if judul not in anime_df["title"].values:
         return None
@@ -62,8 +73,8 @@ def get_recommendations(judul, anime_df, svd_model, tfidf_matrix, top_n=10):
     except:
         bobot = [0.0, 0.7, 0.3]
 
-    # Popularity normalisasi
-    skor_pop = anime_df["score"].fillna(0)
+    # Menggunakan kolom popularity yang sudah disiapkan di load_data()
+    skor_pop = anime_df["popularity"].values
     skor_pop = (skor_pop - skor_pop.min()) / (skor_pop.max() - skor_pop.min() + 1e-8)
     
     skor_final = (skor_svd * bobot[0]) + (skor_genre * bobot[1]) + (skor_pop * bobot[2])
@@ -162,11 +173,9 @@ def profile_page(anime_df, svd_model, tfidf_matrix):
 # =========================
 # MAIN ROUTER
 # =========================
-# Jika belum login, paksa buka halaman login
 if st.session_state.user is None:
     login_page()
 else:
-    # Jika sudah login, tampilkan sidebar navigasi
     st.sidebar.title("Navigasi")
     if st.sidebar.button("🏠 Home"): st.session_state.page = "Home"
     if st.sidebar.button("👤 Profile"): st.session_state.page = "Profile"
