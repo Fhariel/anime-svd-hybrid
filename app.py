@@ -4,12 +4,12 @@ import numpy as np
 import joblib
 from sklearn.metrics.pairwise import cosine_similarity
 
-# =========================h
+# =========================
 # CONFIG
 # =========================
 st.set_page_config(page_title="Anime Recommender", layout="centered")
 
-st.title("Anime Recommendation System")
+st.title("🎌 Anime Recommendation System")
 st.write("Hybrid: SVD + Genre + Popularity")
 
 # =========================
@@ -17,7 +17,8 @@ st.write("Hybrid: SVD + Genre + Popularity")
 # =========================
 @st.cache_data
 def load_data():
-    return pd.read_csv("anime_reference.csv")
+    df = pd.read_csv("anime_reference.csv")
+    return df
 
 @st.cache_resource
 def load_model():
@@ -49,7 +50,8 @@ def rekomendasi(judul, top_n=10):
         return None
 
     idx = anime_df.index[anime_df["title"] == judul][0]
-    anime_id = anime_df.loc[idx, "anime_id"]
+    # Pastikan anime_id diubah ke tipe standar (int) agar tidak ditolak oleh model Surprise
+    anime_id = int(anime_df.loc[idx, "anime_id"]) 
 
     # GENRE
     skor_genre = cosine_similarity(
@@ -68,8 +70,9 @@ def rekomendasi(judul, top_n=10):
             raw_id = svd_model.trainset.to_raw_iid(i)
             if raw_id in id_map:
                 idx_df = id_map[raw_id]
+                # Ditambah 1e-8 untuk mencegah error division by zero
                 sim = np.dot(target_vec, vec) / (
-                    np.linalg.norm(target_vec) * np.linalg.norm(vec)
+                    (np.linalg.norm(target_vec) * np.linalg.norm(vec)) + 1e-8
                 )
                 skor_svd[idx_df] = sim
 
@@ -77,7 +80,7 @@ def rekomendasi(judul, top_n=10):
         bobot_genre = 0.4
         bobot_pop = 0.2
 
-    except:
+    except ValueError: # Lebih spesifik menangkap error jika ID tidak ada di trainset SVD
         bobot_svd = 0.0
         bobot_genre = 0.7
         bobot_pop = 0.3
@@ -93,10 +96,10 @@ def rekomendasi(judul, top_n=10):
         skor_pop * bobot_pop
     )
 
-    skor_final[idx] = -1
+    skor_final[idx] = -1 # Mencegah anime yang dicari muncul di hasil rekomendasi
     top_idx = skor_final.argsort()[::-1][:top_n]
 
-    return anime_df.iloc[top_idx].reset_index(drop=True)
+    return anime_df.iloc[top_idx]
 
 # =========================
 # UI INPUT
@@ -111,31 +114,8 @@ if st.button("Cari Rekomendasi"):
     if hasil is None:
         st.error("Anime tidak ditemukan")
     else:
-        st.subheader("Rekomendasi:")
+        st.subheader("🔥 Rekomendasi:")
 
-        # 🔥 LOOP HARUS DI SINI SEMUA
-        for i, row in hasil.iterrows():
-            title = row["title"]
-            genre = row["genre"]
-
-            search_url = f"https://www.google.com/search?q={title.replace(' ', '+')}"
-
-            st.markdown(f"""
-            <div style="margin-bottom: 20px;">
-                <h4>{i+1}. {title}</h4>
-                <p><b>Genre:</b> {genre}</p>
-                <a href="{search_url}" target="_blank">
-                    <button style="
-                        padding: 6px 12px;
-                        border-radius: 6px;
-                        border: none;
-                        background-color: #4CAF50;
-                        color: white;
-                        cursor: pointer;">
-                        Search on Google
-                    </button>
-                </a>
-            </div>
-            """, unsafe_allow_html=True)
-
-            st.markdown("---")
+        for _, row in hasil.iterrows():
+            st.write(f"**{row['title']}**")
+            st.caption(row["genre"])
