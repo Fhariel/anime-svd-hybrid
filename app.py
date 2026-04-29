@@ -24,17 +24,18 @@ if 'user' not in st.session_state:
 if 'page' not in st.session_state:
     st.session_state.page = "Home"
 
+# Tambahan: Memori sementara untuk menahan hasil pencarian
+if 'search_result' not in st.session_state:
+    st.session_state.search_result = None
+
 # =========================
 # LOAD DATA & BULLETPROOF PREPROCESS
 # =========================
 @st.cache_data
 def load_data():
     df = pd.read_csv("anime_reference.csv")
-    
-    # 1. Otomatis mengubah semua nama kolom jadi huruf kecil (Score -> score)
     df.columns = df.columns.str.lower()
     
-    # 2. Pengaman jika kolom tidak ada di CSV
     if "genre" not in df.columns:
         df["genre"] = ""
     df["genre"] = df["genre"].fillna("")
@@ -47,9 +48,7 @@ def load_data():
         df["members"] = 0.0
     df["members"] = pd.to_numeric(df["members"], errors="coerce").fillna(0)
     
-    # 3. Hitung popularity (aman dari error berkat pengaman di atas)
     df["popularity"] = (df["score"] * 0.7) + (np.log1p(df["members"]) * 0.3)
-    
     return df
 
 @st.cache_resource
@@ -96,9 +95,15 @@ def get_recommendations(judul, anime_df, svd_model, tfidf_matrix, top_n=10):
 # =========================
 def save_favorite(user_id, anime_id, title):
     if supabase:
-        data = {"user_id": user_id, "anime_id": anime_id, "anime_title": title}
-        supabase.table("favorites").insert(data).execute()
-        st.toast(f"✅ {title} disimpan ke favorit!")
+        # Tambahan: Cek dulu ke Supabase apakah anime ini sudah pernah disimpan user ini
+        existing = supabase.table("favorites").select("*").eq("user_id", user_id).eq("anime_id", int(anime_id)).execute()
+        
+        if len(existing.data) == 0:
+            data = {"user_id": user_id, "anime_id": int(anime_id), "anime_title": title}
+            supabase.table("favorites").insert(data).execute()
+            st.toast(f"✅ {title} berhasil disimpan ke favorit!")
+        else:
+            st.toast(f"⚠️ {title} sudah ada di daftar favoritmu!")
     else:
         st.error("Gagal menyimpan, database tidak terhubung.")
 
@@ -149,9 +154,14 @@ def home_page(anime_df, svd_model, tfidf_matrix):
     st.title("🔍 Cari Rekomendasi")
     selected = st.selectbox("Pilih Anime:", anime_df["title"].sort_values())
     
+    # Perbaikan: Simpan hasil pencarian ke memori (session_state)
     if st.button("Cari", type="primary"):
-        hasil = get_recommendations(selected, anime_df, svd_model, tfidf_matrix)
-        if hasil is not None:
+        st.session_state.search_result = get_recommendations(selected, anime_df, svd_model, tfidf_matrix)
+        
+    # Render hasil dari memori agar tidak hilang saat layarnya ter-refresh
+    if st.session_state.search_result is not None:
+        hasil = st.session_state.search_result
+        if len(hasil) > 0:
             for _, row in hasil.iterrows():
                 with st.container(border=True):
                     col1, col2 = st.columns([0.8, 0.2])
@@ -187,12 +197,15 @@ if st.session_state.user is None:
     login_page()
 else:
     st.sidebar.title("Navigasi")
-    if st.sidebar.button("🏠 Home"): st.session_state.page = "Home"
-    if st.sidebar.button("👤 Profile"): st.session_state.page = "Profile"
+    if st.sidebar.button("🏠 Home"): 
+        st.session_state.page = "Home"
+    if st.sidebar.button("👤 Profile"): 
+        st.session_state.page = "Profile"
     if st.sidebar.button("🚪 Logout"):
         supabase.auth.sign_out()
         st.session_state.user = None
         st.session_state.page = "Home"
+        st.session_state.search_result = None # Bersihkan memori saat logout
         st.rerun()
 
     df = load_data()
