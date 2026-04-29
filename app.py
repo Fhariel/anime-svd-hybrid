@@ -25,18 +25,29 @@ if 'page' not in st.session_state:
     st.session_state.page = "Home"
 
 # =========================
-# LOAD DATA & PREPROCESS
+# LOAD DATA & BULLETPROOF PREPROCESS
 # =========================
 @st.cache_data
 def load_data():
     df = pd.read_csv("anime_reference.csv")
     
-    # Mengembalikan logika PREPROCESS dari kodemu yang asli agar terhindar dari KeyError
-    df["genre"] = df.get("genre", pd.Series(dtype=str)).fillna("")
-    df["score"] = pd.to_numeric(df.get("score", 0), errors="coerce").fillna(0)
-    df["members"] = pd.to_numeric(df.get("members", 0), errors="coerce").fillna(0)
+    # 1. Otomatis mengubah semua nama kolom jadi huruf kecil (Score -> score)
+    df.columns = df.columns.str.lower()
     
-    # Hitung popularity sejak awal
+    # 2. Pengaman jika kolom tidak ada di CSV
+    if "genre" not in df.columns:
+        df["genre"] = ""
+    df["genre"] = df["genre"].fillna("")
+    
+    if "score" not in df.columns:
+        df["score"] = 0.0
+    df["score"] = pd.to_numeric(df["score"], errors="coerce").fillna(0)
+    
+    if "members" not in df.columns:
+        df["members"] = 0.0
+    df["members"] = pd.to_numeric(df["members"], errors="coerce").fillna(0)
+    
+    # 3. Hitung popularity (aman dari error berkat pengaman di atas)
     df["popularity"] = (df["score"] * 0.7) + (np.log1p(df["members"]) * 0.3)
     
     return df
@@ -73,7 +84,6 @@ def get_recommendations(judul, anime_df, svd_model, tfidf_matrix, top_n=10):
     except:
         bobot = [0.0, 0.7, 0.3]
 
-    # Menggunakan kolom popularity yang sudah disiapkan di load_data()
     skor_pop = anime_df["popularity"].values
     skor_pop = (skor_pop - skor_pop.min()) / (skor_pop.max() - skor_pop.min() + 1e-8)
     
@@ -146,7 +156,7 @@ def home_page(anime_df, svd_model, tfidf_matrix):
                 with st.container(border=True):
                     col1, col2 = st.columns([0.8, 0.2])
                     col1.write(f"**{row['title']}**")
-                    col1.caption(f"Genre: {row['genre']} | Score: {row['score']}")
+                    col1.caption(f"Genre: {row['genre']} | Score: {row['score']:.2f}")
                     if col2.button("⭐ Simpan", key=f"fav_{row['anime_id']}"):
                         save_favorite(st.session_state.user.id, row['anime_id'], row['title'])
         else:
@@ -168,7 +178,7 @@ def profile_page(anime_df, svd_model, tfidf_matrix):
                 if hasil is not None:
                     st.write("Berdasarkan anime ini, kamu mungkin suka:")
                     for _, row in hasil.iterrows():
-                        st.write(f"- {row['title']}")
+                        st.write(f"- {row['title']} (Score: {row['score']:.2f})")
 
 # =========================
 # MAIN ROUTER
