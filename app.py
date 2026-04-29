@@ -13,32 +13,33 @@ st.set_page_config(page_title="Anime Recommender", layout="wide")
 @st.cache_resource
 def init_connection():
     try:
+        # Mengambil rahasia dari Streamlit Secrets
         return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
-    except:
+    except Exception as e:
         return None
 
 supabase = init_connection()
 
+# Inisialisasi status user di memori browser
 if 'user' not in st.session_state:
     st.session_state.user = None
 if 'page' not in st.session_state:
-    st.session_state.page = "Home" # Default page
+    st.session_state.page = "Home"
 
 # =========================
 # DATA & RECOM LOGIC
 # =========================
 @st.cache_data
 def load_data():
-    return pd.read_csv("anime_reference.csv") #
+    return pd.read_csv("anime_reference.csv")
 
 @st.cache_resource
 def load_model():
-    svd = joblib.load("svd_model.pkl") #
+    svd = joblib.load("svd_model.pkl")
     tfidf = joblib.load("tfidf_matrix.pkl")
     return svd, tfidf
 
 def get_recommendations(judul, anime_df, svd_model, tfidf_matrix, top_n=10):
-    # Logika Hybrid SVD + Genre + Popularity dari kodemu sebelumnya
     if judul not in anime_df["title"].values:
         return None
     
@@ -55,13 +56,16 @@ def get_recommendations(judul, anime_df, svd_model, tfidf_matrix, top_n=10):
         for i, vec in enumerate(svd_model.qi):
             raw_id = svd_model.trainset.to_raw_iid(i)
             if raw_id in id_map:
-                sim = np.dot(target_vec, vec) / (np.linalg.norm(target_vec) * np.linalg.norm(vec) + 1e-8)
+                sim = np.dot(target_vec, vec) / ((np.linalg.norm(target_vec) * np.linalg.norm(vec)) + 1e-8)
                 skor_svd[id_map[raw_id]] = sim
         bobot = [0.4, 0.4, 0.2]
     except:
         bobot = [0.0, 0.7, 0.3]
 
-    skor_pop = anime_df["score"].fillna(0) # Sederhana untuk contoh
+    # Popularity normalisasi
+    skor_pop = anime_df["score"].fillna(0)
+    skor_pop = (skor_pop - skor_pop.min()) / (skor_pop.max() - skor_pop.min() + 1e-8)
+    
     skor_final = (skor_svd * bobot[0]) + (skor_genre * bobot[1]) + (skor_pop * bobot[2])
     skor_final[idx] = -1
     return anime_df.iloc[skor_final.argsort()[::-1][:top_n]]
@@ -70,30 +74,72 @@ def get_recommendations(judul, anime_df, svd_model, tfidf_matrix, top_n=10):
 # HELPER DATABASE
 # =========================
 def save_favorite(user_id, anime_id, title):
-    data = {"user_id": user_id, "anime_id": anime_id, "anime_title": title}
-    supabase.table("favorites").insert(data).execute()
-    st.toast(f"✅ {title} disimpan ke favorit!")
+    if supabase:
+        data = {"user_id": user_id, "anime_id": anime_id, "anime_title": title}
+        supabase.table("favorites").insert(data).execute()
+        st.toast(f"✅ {title} disimpan ke favorit!")
+    else:
+        st.error("Gagal menyimpan, database tidak terhubung.")
 
 def get_user_favorites(user_id):
-    res = supabase.table("favorites").select("*").eq("user_id", user_id).execute()
-    return res.data
+    if supabase:
+        res = supabase.table("favorites").select("*").eq("user_id", user_id).execute()
+        return res.data
+    return []
 
 # =========================
 # UI PAGES
 # =========================
+def login_page():
+    st.title("🎌 Anime Recommendation System")
+    st.markdown("Silakan Login atau Register untuk masuk ke dalam sistem.")
+    
+    if supabase is None:
+        st.error("Koneksi Supabase belum diatur di Streamlit Secrets.")
+        return
+
+    tab1, tab2 = st.tabs(["Login", "Register"])
+    
+    with tab1:
+        st.subheader("Masuk ke Akun")
+        email_login = st.text_input("Email", key="log_email")
+        pass_login = st.text_input("Password", type="password", key="log_pass")
+        if st.button("Login", type="primary"):
+            try:
+                response = supabase.auth.sign_in_with_password({"email": email_login, "password": pass_login})
+                st.session_state.user = response.user
+                st.success("Login berhasil!")
+                st.rerun()
+            except Exception as e:
+                st.error("Login gagal. Periksa kembali email dan password.")
+
+    with tab2:
+        st.subheader("Buat Akun Baru")
+        email_reg = st.text_input("Email", key="reg_email")
+        pass_reg = st.text_input("Password", type="password", key="reg_pass")
+        if st.button("Register"):
+            try:
+                response = supabase.auth.sign_up({"email": email_reg, "password": pass_reg})
+                st.success("Registrasi berhasil! Silakan pindah ke tab Login untuk masuk.")
+            except Exception as e:
+                st.error("Registrasi gagal. Pastikan password minimal 6 karakter.")
+
 def home_page(anime_df, svd_model, tfidf_matrix):
     st.title("🔍 Cari Rekomendasi")
     selected = st.selectbox("Pilih Anime:", anime_df["title"].sort_values())
     
     if st.button("Cari", type="primary"):
         hasil = get_recommendations(selected, anime_df, svd_model, tfidf_matrix)
-        for _, row in hasil.iterrows():
-            with st.container(border=True):
-                col1, col2 = st.columns([0.8, 0.2])
-                col1.write(f"**{row['title']}**")
-                col1.caption(f"Genre: {row['genre']}")
-                if col2.button("⭐ Simpan", key=f"fav_{row['anime_id']}"):
-                    save_favorite(st.session_state.user.id, row['anime_id'], row['title'])
+        if hasil is not None:
+            for _, row in hasil.iterrows():
+                with st.container(border=True):
+                    col1, col2 = st.columns([0.8, 0.2])
+                    col1.write(f"**{row['title']}**")
+                    col1.caption(f"Genre: {row['genre']} | Score: {row['score']}")
+                    if col2.button("⭐ Simpan", key=f"fav_{row['anime_id']}"):
+                        save_favorite(st.session_state.user.id, row['anime_id'], row['title'])
+        else:
+            st.error("Anime tidak ditemukan.")
 
 def profile_page(anime_df, svd_model, tfidf_matrix):
     st.title("👤 Profil Saya")
@@ -108,24 +154,26 @@ def profile_page(anime_df, svd_model, tfidf_matrix):
         with st.expander(f"📖 {f['anime_title']}"):
             if st.button(f"🎯 Cari Rekomendasi yang Cocok", key=f"rec_{f['anime_id']}"):
                 hasil = get_recommendations(f['anime_title'], anime_df, svd_model, tfidf_matrix)
-                st.write("Berdasarkan anime ini, kamu mungkin suka:")
-                for _, row in hasil.iterrows():
-                    st.write(f"- {row['title']}")
+                if hasil is not None:
+                    st.write("Berdasarkan anime ini, kamu mungkin suka:")
+                    for _, row in hasil.iterrows():
+                        st.write(f"- {row['title']}")
 
 # =========================
 # MAIN ROUTER
 # =========================
+# Jika belum login, paksa buka halaman login
 if st.session_state.user is None:
-    # Halaman Login/Register (Gunakan kode sebelumnya)
-    pass 
+    login_page()
 else:
-    # Sidebar Navigasi
+    # Jika sudah login, tampilkan sidebar navigasi
     st.sidebar.title("Navigasi")
     if st.sidebar.button("🏠 Home"): st.session_state.page = "Home"
     if st.sidebar.button("👤 Profile"): st.session_state.page = "Profile"
     if st.sidebar.button("🚪 Logout"):
         supabase.auth.sign_out()
         st.session_state.user = None
+        st.session_state.page = "Home"
         st.rerun()
 
     df = load_data()
