@@ -148,7 +148,8 @@ def login_page():
                 response = supabase.auth.sign_up({"email": email_reg, "password": pass_reg})
                 st.success("Registrasi berhasil! Silakan pindah ke tab Login untuk masuk.")
             except Exception as e:
-                st.error("Registrasi gagal. Pastikan password minimal 6 karakter.")
+                # FIX: Tampilkan error asli dari Supabase
+                st.error(f"Registrasi gagal: {str(e)}")
 
 def home_page(anime_df, svd_model, tfidf_matrix):
     st.title("🔍 Cari Rekomendasi")
